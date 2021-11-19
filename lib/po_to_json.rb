@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+# frozen_string_literal: true
 #
 # Copyright (c) 2012-2015 Dropmysite.com <https://dropmyemail.com>
 # Copyright (c) 2015 Webhippie <http://www.webhippie.de>
@@ -70,7 +71,7 @@ class PoToJson
     reset_result
 
     File.foreach(files) do |line|
-      matches_values_for(line.chomp)
+      matches_values_for(line.chomp! || line)
     end
 
     flush_buffer
@@ -80,7 +81,7 @@ class PoToJson
   end
 
   def flush_buffer
-    return unless buffer[:msgid]
+    return unless buffer["msgid"]
 
     build_trans
     assign_trans
@@ -146,8 +147,8 @@ class PoToJson
   end
 
   def detect_ctxt
-    msgctxt = buffer[:msgctxt]
-    msgid = buffer[:msgid]
+    msgctxt = buffer["msgctxt"]
+    msgid = buffer["msgid"]
 
     if msgctxt && msgctxt.size > 0
       [msgctxt, glue, msgid].join("")
@@ -157,13 +158,13 @@ class PoToJson
   end
 
   def detect_plural
-    plural = buffer[:msgid_plural]
+    plural = buffer["msgid_plural"]
     plural if plural && plural.size > 0
   end
 
   def build_trans
     buffer.each do |key, string|
-      trans[$1.to_i] = string if key.to_s.match(/^msgstr_(\d+)/)
+      trans[$1.to_i] = string if /^msgstr_(\d+)/.match(key)
     end
 
     # trans.unshift(detect_plural) if detect_plural
@@ -173,10 +174,7 @@ class PoToJson
     values[detect_ctxt] = trans if trans.size > 0
   end
 
-  def push_buffer(value, key = nil)
-    value = $1 if value =~ /^"(.*)"/
-    value.gsub(/\\"/, "\"")
-
+  def push_buffer(value, key)
     if key.nil?
       buffer[lastkey] = [
         buffer[lastkey],
@@ -243,82 +241,44 @@ class PoToJson
 
   def matches_values_for(line)
     return if generic_rejects? line
-    return if generic_detects? line
-
     return if iterate_detects_for(line)
 
     errors.push "Strange line #{line}"
   end
 
+  REGEXP = %r{
+    ^(?:\#~ )?
+    (?:
+      (?<key>
+        msgctxt         |
+        msgid           |
+        msgid_plural    |
+        msgstr          |
+        msgstr\[(?<index>\d+)\]
+      )
+      \s+
+    )?
+    "(?<value>.*)"
+  }x
+
   def iterate_detects_for(line)
-    specific_detects.each do |detect|
-      match = line.match(detect[:regex])
-
-      if match
-        if detect[:index]
-          push_buffer(match[detect[:index]], detect[:key].call(match))
-        else
-          push_buffer(line)
-        end
-
-        return true
-      end
+    match = REGEXP.match(line)
+    return false unless match
+    if match[:key]&.start_with?("msgstr")
+      index = match[:index] || 0
+      push_buffer(match[:value], "msgstr_#{index}")
+    else
+      push_buffer(match[:value], match[:key])
     end
 
-    false
+    true
   end
 
   def generic_rejects?(line)
-    if line.match(/^$/) || line.match(/^(#[^~]|[#]$)/)
+    if line.empty? || /^(#[^~]|[#]$)/.match?(line)
       flush_buffer && true
     else
       false
     end
-  end
-
-  def generic_detects?(line)
-    match = line.match(/^(?:#~ )?msgctxt\s+(.*)/)
-
-    if match
-      push_buffer(
-        match[1],
-        :msgctxt
-      )
-
-      return true
-    end
-
-    false
-  end
-
-  def specific_detects
-    [{
-      regex: /^(?:#~ )?msgctxt\s+(.*)/,
-      index: 1,
-      key: proc { :msgctxt }
-    }, {
-      regex: /^(?:#~ )?msgid\s+(.*)/,
-      index: 1,
-      key: proc { :msgid }
-    }, {
-      regex: /^(?:#~ )?msgid_plural\s+(.*)/,
-      index: 1,
-      key: proc { :msgid_plural }
-    }, {
-      regex: /^(?:#~ )?msgstr\s+(.*)/,
-      index: 1,
-      key: proc { :msgstr_0 }
-    }, {
-      regex: /^(?:#~ )?msgstr\[0\]\s+(.*)/,
-      index: 1,
-      key: proc { :msgstr_0 }
-    }, {
-      regex: /^(?:#~ )?msgstr\[(\d+)\]\s+(.*)/,
-      index: 2,
-      key: proc { |m| "msgstr_#{m[1]}".to_sym }
-    }, {
-      regex: /^(?:#~ )?"/,
-      index: nil
-    }]
   end
 end
