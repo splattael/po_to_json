@@ -85,6 +85,12 @@ describe PoToJson do
       )
     end
 
+    it "should match escaped values with double quotes" do
+      expect(subject['\"%{path}\" did not exist on \"%{ref}\"']).to(
+        eq(['\"%{path}\" existiert nicht auf \"%{ref}\"'])
+      )
+    end
+
     it "should match multiline translations" do
       expect(subject["this is a dynamic translation which was found!"]).to(
         eq(["Dies ist eine dynamische Übersetzung, die gefunden wurde!"])

@@ -67,3 +67,6 @@ msgstr "Du solltest '\\' als '\\\\' escapen."
 
 msgid "Umläüte"
 msgstr "Umlaute"
+
+msgid "\"%{path}\" did not exist on \"%{ref}\""
+msgstr "\"%{path}\" existiert nicht auf \"%{ref}\""
